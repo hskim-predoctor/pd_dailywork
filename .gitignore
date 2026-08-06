@@ -1,0 +1,13 @@
+# 자격증명 — 절대 커밋 금지 (Anthropic API 키, Notion 토큰)
+config.json
+
+# 실행 산출물
+logs/
+data/
+
+# 파이썬
+__pycache__/
+*.py[cod]
+
+# macOS
+.DS_Store

@@ -1,0 +1,8 @@
+{
+  "author": "김한성",
+  "model": "claude-opus-4-8",
+  "notion_token": "ntn_여기에_토큰",
+  "notion_database_id": "여기에_32자hex",
+  "notion_props": { "title": "제목", "date": "날짜", "author": "작성자", "project": "프로젝트" },
+  "repo_roots": ["~/predoctor_workspace"]
+}
