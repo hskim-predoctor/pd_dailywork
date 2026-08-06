@@ -55,7 +55,8 @@ def main() -> None:
     payload = {
         "host": __import__("socket").gethostname(),
         "date": date_iso,
-        "git": sorted(collect_mac.collect_git(date_iso), key=lambda e: e["time"]),
+        "git": sorted(collect_mac.collect_git(date_iso, cfg.get("git_authors")),
+                      key=lambda e: e["time"]),
         "claude": sorted(collect_mac.collect_claude(start, end), key=lambda e: e["time"]),
     }
     print(f"[수집] {date_iso}  git={len(payload['git'])}  claude={len(payload['claude'])}")

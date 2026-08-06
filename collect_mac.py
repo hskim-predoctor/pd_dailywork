@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import socket
 import subprocess
 from datetime import datetime, timedelta, time
@@ -24,8 +25,14 @@ HOME = Path.home()
 
 # 수집 대상 --------------------------------------------------------------
 CLAUDE_PROJECTS = HOME / ".claude" / "projects"
-# git 저장소를 찾을 루트들 (하위 3단계까지 .git 탐색)
+# git 저장소를 찾을 루트들 (하위 전체 깊이를 재귀 탐색)
 REPO_ROOTS = [HOME / "predoctor_workspace"]
+# 저장소 탐색 시 내려가지 않을 디렉터리.
+# _deps/third_party 류는 CMake 등이 받아온 **외부 저장소**라 남의 커밋이 섞인다.
+SKIP_DIRS = {"node_modules", "venv", "__pycache__", "dist", "build",
+             "vendor", "Pods", "target", "site-packages",
+             "_deps", "third_party", "thirdparty", "external", "extern",
+             "subprojects", "Carthage"}
 # 요약 재료로 너무 큰 도구 출력은 자른다
 MAX_TEXT = 2000
 
@@ -105,27 +112,40 @@ def collect_claude(start: datetime, end: datetime) -> list[dict]:
 
 
 def find_repos() -> list[Path]:
+    """REPO_ROOTS 아래 **모든 깊이**의 git 저장소를 찾는다.
+
+    서브모듈은 .git 이 파일이므로 디렉터리/파일 양쪽을 확인하고,
+    저장소를 찾아도 하위를 계속 훑어 중첩 저장소를 놓치지 않는다.
+    """
     repos: list[Path] = []
     for root in REPO_ROOTS:
         if not root.exists():
             continue
-        for gitdir in root.glob("*/.git"):
-            repos.append(gitdir.parent)
-        for gitdir in root.glob("*/*/.git"):
-            repos.append(gitdir.parent)
+        for dirpath, dirnames, _ in os.walk(root):
+            here = Path(dirpath)
+            if (here / ".git").exists():          # 디렉터리(일반) 또는 파일(서브모듈)
+                repos.append(here)
+            # 숨김 디렉터리와 의존성/빌드 산출물은 내려가지 않는다
+            dirnames[:] = [d for d in dirnames
+                           if not d.startswith(".") and d not in SKIP_DIRS]
     return sorted(set(repos))
 
 
-def collect_git(date_iso: str) -> list[dict]:
-    """그날 커밋을 이벤트로 수집 (작성자 무관, repo별)."""
+def collect_git(date_iso: str, authors: list[str] | None = None) -> list[dict]:
+    """그날 커밋을 이벤트로 수집 (repo별).
+
+    authors 를 주면 그 이름/이메일의 커밋만 센다. 외부 저장소가 탐색에
+    섞여 들어와도 남의 커밋이 내 업무일지에 들어가지 않게 하는 안전장치.
+    """
     events: list[dict] = []
     since = f"{date_iso} 00:00:00"
     until = f"{date_iso} 23:59:59"
+    author_args = [f"--author={a}" for a in (authors or [])]  # 여러 개면 OR
     for repo in find_repos():
         try:
             out = subprocess.run(
                 ["git", "-C", str(repo), "log",
-                 f"--since={since}", f"--until={until}",
+                 f"--since={since}", f"--until={until}", *author_args,
                  "--pretty=format:%H\x1f%an\x1f%aI\x1f%s", "--shortstat"],
                 capture_output=True, text=True, timeout=15,
             ).stdout
