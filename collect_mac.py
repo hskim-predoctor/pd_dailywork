@@ -66,8 +66,30 @@ def flatten_content(content) -> str:
     return "\n".join(p for p in parts if p).strip()
 
 
-def collect_claude(start: datetime, end: datetime) -> list[dict]:
-    """기간 내 user/assistant 메시지를 이벤트로 수집."""
+def _under(path_str: str, roots: list[Path]) -> bool:
+    """path_str 이 roots 중 하나의 하위인지."""
+    if not path_str:
+        return False
+    try:
+        p = Path(path_str).resolve()
+    except OSError:
+        return False
+    for r in roots:
+        try:
+            p.relative_to(r.expanduser().resolve())
+            return True
+        except ValueError:
+            continue
+    return False
+
+
+def collect_claude(start: datetime, end: datetime,
+                   roots: list[Path] | None = None) -> list[dict]:
+    """기간 내 user/assistant 메시지를 이벤트로 수집.
+
+    roots 를 주면 세션의 cwd 가 그 하위인 대화만 담는다. git 수집과
+    감시 범위를 일치시켜, 업무 폴더 밖 개인 작업이 섞이지 않게 한다.
+    """
     events: list[dict] = []
     if not CLAUDE_PROJECTS.exists():
         return events
@@ -95,6 +117,8 @@ def collect_claude(start: datetime, end: datetime) -> list[dict]:
                 continue
             if not (start <= ts < end):
                 continue
+            if roots is not None and not _under(d.get("cwd", ""), roots):
+                continue                       # 감시 폴더 밖 세션은 제외
             msg = d.get("message") or {}
             text = flatten_content(msg.get("content"))
             if not text:

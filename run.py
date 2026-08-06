@@ -50,6 +50,10 @@ def main() -> None:
     if cfg.get("repo_roots"):
         collect_mac.REPO_ROOTS = [Path(os.path.expanduser(r)) for r in cfg["repo_roots"]]
 
+    # 대화도 repo_roots 안으로 한정할지 (기본 True). False 면 전역 수집.
+    claude_roots = (collect_mac.REPO_ROOTS
+                    if cfg.get("scope_claude_to_roots", True) else None)
+
     # 1) 수집
     start, end, date_iso = collect_mac.day_bounds(args.date)
     payload = {
@@ -57,7 +61,8 @@ def main() -> None:
         "date": date_iso,
         "git": sorted(collect_mac.collect_git(date_iso, cfg.get("git_authors")),
                       key=lambda e: e["time"]),
-        "claude": sorted(collect_mac.collect_claude(start, end), key=lambda e: e["time"]),
+        "claude": sorted(collect_mac.collect_claude(start, end, claude_roots),
+                         key=lambda e: e["time"]),
     }
     print(f"[수집] {date_iso}  git={len(payload['git'])}  claude={len(payload['claude'])}")
 
