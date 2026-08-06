@@ -35,9 +35,28 @@ SYSTEM = (
 )
 
 
-def build_prompt(payload: dict) -> str:
-    """수집 payload를 요약용 텍스트로 압축."""
+def build_prompt(payload: dict, previous: dict | None = None) -> str:
+    """수집 payload를 요약용 텍스트로 압축.
+
+    previous(직전 발행 이력)를 주면 이미 보고된 내용을 프롬프트에 넣어
+    같은 항목이 날마다 반복 보고되는 것을 막는다.
+    """
     lines: list[str] = [f"날짜: {payload.get('date')}", ""]
+
+    if previous and previous.get("summary"):
+        prev, ps = previous, previous["summary"]
+        lines.append(f"## 직전 보고({prev.get('date')})에 이미 실린 내용")
+        lines.append(f"- 한줄: {ps.get('headline','')}")
+        for key, label in (("done", "한 일"), ("decisions", "결정"),
+                           ("next", "다음 할 일")):
+            for item in (ps.get(key) or []):
+                lines.append(f"- [{label}] {item}")
+        lines.append("")
+        lines.append("위는 **이미 보고된** 내용이다. 오늘 로그에 같은 작업이 이어지더라도 "
+                     "그대로 반복하지 말고, 오늘 새로 진행된 부분만 쓴다. "
+                     "다만 어제 '다음 할 일'로 적힌 것을 오늘 실제로 했다면 그건 "
+                     "오늘의 '한 일'로 쓴다. 오늘 새로운 진전이 없으면 빈 배열로 둔다.")
+        lines.append("")
 
     git = payload.get("git", [])
     lines.append(f"## Git 커밋 ({len(git)}개)")
@@ -62,7 +81,7 @@ def build_prompt(payload: dict) -> str:
 
 
 def summarize(payload: dict, model: str = "claude-opus-5",
-              api_key: str | None = None) -> dict:
+              api_key: str | None = None, previous: dict | None = None) -> dict:
     """payload를 요약해 구조화된 dict를 반환."""
     import anthropic  # 지연 임포트: --no-llm 모드에선 SDK 불필요
 
@@ -75,7 +94,7 @@ def summarize(payload: dict, model: str = "claude-opus-5",
             "format": {"type": "json_schema", "schema": SUMMARY_SCHEMA},
             "effort": "medium",  # 하루 요약은 routine 작업 — 토큰 절약
         },
-        messages=[{"role": "user", "content": build_prompt(payload)}],
+        messages=[{"role": "user", "content": build_prompt(payload, previous)}],
     )
     text = next(b.text for b in resp.content if b.type == "text")
     return json.loads(text)
@@ -102,12 +121,12 @@ def _extract_json(text: str) -> dict:
 
 
 def summarize_cli(payload: dict, model: str | None = None,
-                  timeout: int = 600) -> dict:
+                  timeout: int = 600, previous: dict | None = None) -> dict:
     """Claude Code CLI(`claude -p`)로 요약. API 크레딧 대신 구독을 사용한다."""
     import subprocess
 
     prompt = (
-        f"{SYSTEM}\n\n{build_prompt(payload)}\n\n"
+        f"{SYSTEM}\n\n{build_prompt(payload, previous)}\n\n"
         "결과는 아래 스키마의 JSON 오브젝트 하나만 출력하라. "
         "설명, 인사말, 코드펜스 없이 JSON만.\n"
         f"{json.dumps(SUMMARY_SCHEMA, ensure_ascii=False)}"

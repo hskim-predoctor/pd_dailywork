@@ -20,6 +20,7 @@ from pathlib import Path
 import collect_mac
 import summarize as S
 import publish_notion as P
+import store
 
 HERE = Path(__file__).resolve().parent
 
@@ -66,7 +67,10 @@ def main() -> None:
     }
     print(f"[수집] {date_iso}  git={len(payload['git'])}  claude={len(payload['claude'])}")
 
-    # 2) 요약
+    # 2) 요약 — 직전 발행분을 넘겨 같은 내용이 반복 보고되지 않게 한다
+    previous = store.load_previous(date_iso)
+    if previous:
+        print(f"[비교] 직전 발행({previous['date']})과 대조")
     if args.no_llm:
         summary = S.stub_summary(payload)
         print("[요약] --no-llm: 자리표시 요약 사용")
@@ -75,10 +79,11 @@ def main() -> None:
         backend = cfg.get("backend", "cli")
         model = cfg.get("model", "claude-opus-5")
         if backend == "cli":
-            summary = S.summarize_cli(payload, model=model)
+            summary = S.summarize_cli(payload, model=model, previous=previous)
         else:
             api_key = cfg.get("anthropic_api_key") or os.environ.get("ANTHROPIC_API_KEY")
-            summary = S.summarize(payload, model=model, api_key=api_key)
+            summary = S.summarize(payload, model=model, api_key=api_key,
+                                  previous=previous)
         print(f"[요약:{backend}] {summary['headline']}")
 
     # 3) 발행
@@ -92,10 +97,28 @@ def main() -> None:
         print(json.dumps(page, ensure_ascii=False, indent=2))
         return
 
-    url = P.publish(summary, date=date_iso, author=author, host=payload["host"],
-                    db_id=cfg["notion_database_id"], token=cfg["notion_token"],
-                    props_cfg=cfg.get("notion_props", {}))
-    print(f"[발행] {url}")
+    common = dict(date=date_iso, author=author, host=payload["host"],
+                  db_id=cfg["notion_database_id"], token=cfg["notion_token"],
+                  props_cfg=cfg.get("notion_props", {}))
+
+    # 같은 날짜를 이미 발행했으면 새로 만들지 않고 그 페이지를 갱신한다.
+    existing = store.load(date_iso)
+    page_id = url = None
+    if existing and existing.get("notion_page_id"):
+        try:
+            page_id, url = P.update(summary, page_id=existing["notion_page_id"], **common)
+            print(f"[갱신] {url}")
+        except RuntimeError as e:
+            # 페이지가 지워졌거나 접근 불가 → 새로 만든다
+            print(f"[갱신실패→신규] {str(e)[:120]}")
+    if page_id is None:
+        page_id, url = P.publish(summary, **common)
+        print(f"[발행] {url}")
+
+    rec = store.save(date_iso, title=f"{date_iso} · {author} 업무 요약",
+                     summary=summary, host=payload["host"],
+                     page_id=page_id, url=url)
+    print(f"[기록] {rec.relative_to(HERE)}")
 
 
 if __name__ == "__main__":

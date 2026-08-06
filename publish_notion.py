@@ -103,8 +103,43 @@ def build_page(summary: dict, date: str, author: str, host: str,
 
 
 def publish(summary: dict, *, date: str, author: str, host: str,
-            db_id: str, token: str, props_cfg: dict) -> str:
+            db_id: str, token: str, props_cfg: dict) -> tuple[str, str]:
+    """새 페이지 생성. (page_id, url) 반환."""
     title_prop = discover_title_prop(db_id, token)
     page = build_page(summary, date, author, host, db_id, props_cfg, title_prop)
     res = _req("POST", f"{API}/pages", token, page)
-    return res.get("url", "(url 없음)")
+    return res["id"], res.get("url", "(url 없음)")
+
+
+def _clear_children(page_id: str, token: str) -> None:
+    """페이지 본문 블록을 모두 지운다(갱신 전 비우기)."""
+    while True:
+        res = _req("GET", f"{API}/blocks/{page_id}/children?page_size=100", token)
+        blocks = res.get("results", [])
+        if not blocks:
+            return
+        for b in blocks:
+            _req("DELETE", f"{API}/blocks/{b['id']}", token)
+        if not res.get("has_more"):
+            return
+
+
+def update(summary: dict, *, date: str, author: str, host: str, page_id: str,
+           db_id: str, token: str, props_cfg: dict) -> tuple[str, str]:
+    """기존 페이지의 속성과 본문을 새 요약으로 교체. (page_id, url) 반환.
+
+    페이지가 지워졌거나(404) 사용자가 보관 처리했으면 RuntimeError 를 올려
+    호출측이 새로 만들도록 한다. 지운 페이지를 되살리지 않는다.
+    """
+    cur = _req("GET", f"{API}/pages/{page_id}", token)      # 404 면 여기서 예외
+    if cur.get("archived") or cur.get("in_trash"):
+        raise RuntimeError(f"페이지가 보관/삭제됨: {page_id}")
+
+    title_prop = discover_title_prop(db_id, token)
+    page = build_page(summary, date, author, host, db_id, props_cfg, title_prop)
+    res = _req("PATCH", f"{API}/pages/{page_id}", token,
+               {"properties": page["properties"]})
+    _clear_children(page_id, token)
+    _req("PATCH", f"{API}/blocks/{page_id}/children", token,
+         {"children": page["children"]})
+    return page_id, res.get("url", "(url 없음)")
