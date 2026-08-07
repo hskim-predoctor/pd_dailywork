@@ -23,5 +23,11 @@
   "scope_claude_to_roots": true,
   "device": "기기이름",
   "collect_cursor": true,
-  "cursor_since": "YYYY-MM-DD (이 날짜 이전 대화는 제외)"
+  "cursor_since": "YYYY-MM-DD (이 날짜 이전 대화는 제외)",
+  "ssh_repos": [
+    {
+      "host": "ssh-호스트별칭",
+      "path": "/원격/작업/경로"
+    }
+  ]
 }

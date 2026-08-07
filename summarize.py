@@ -59,10 +59,19 @@ def build_prompt(payload: dict, previous: dict | None = None) -> str:
         lines.append("")
 
     git = payload.get("git", [])
-    lines.append(f"## Git 커밋 ({len(git)}개)")
+    lines.append(f"## Git 커밋 — 로컬 ({len(git)}개)")
     for g in git:
         lines.append(f"- [{g.get('project')}] {g.get('subject')}  ({g.get('stat','')})")
     if not git:
+        lines.append("- (없음)")
+    lines.append("")
+
+    gssh = payload.get("git_ssh", [])
+    lines.append(f"## Git 커밋 — 원격 서버 ({len(gssh)}개)")
+    for g in gssh:
+        lines.append(f"- [{g.get('project')}@{g.get('host')}] {g.get('subject')}"
+                     f"  ({g.get('stat','')})")
+    if not gssh:
         lines.append("- (없음)")
     lines.append("")
 

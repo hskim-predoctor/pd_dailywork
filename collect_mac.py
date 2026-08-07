@@ -162,8 +162,9 @@ def collect_git(date_iso: str, authors: list[str] | None = None) -> list[dict]:
     섞여 들어와도 남의 커밋이 내 업무일지에 들어가지 않게 하는 안전장치.
     """
     events: list[dict] = []
-    since = f"{date_iso} 00:00:00"
-    until = f"{date_iso} 23:59:59"
+    # 오프셋을 명시해 기기 시간대와 무관하게 KST 하루로 자른다
+    start, end, _ = day_bounds(date_iso)
+    since, until = start.isoformat(), end.isoformat()
     author_args = [f"--author={a}" for a in (authors or [])]  # 여러 개면 OR
     for repo in find_repos():
         try:

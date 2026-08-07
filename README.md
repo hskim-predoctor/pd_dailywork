@@ -21,8 +21,12 @@ VSCode/Cursor Remote-SSH로 서버에 붙어 작업하면 **AI 대화는 클라�
 쌓인다.** 서버에 수집기를 설치할 이유가 없고, 컨테이너에 붙어 작업하는 경우
 서버에 설치해도 컨테이너 안 저장소는 보이지 않는다. 맥 한 곳에서 모은다.
 
-서버의 git 커밋은 맥에 사본이 없으므로 잡히지 않는다. 커밋을 GitHub에 push하고
-그쪽에서 가져오거나, SSH로 원격 `git log`를 돌리는 방식이 필요하다(미구현).
+서버의 git 커밋은 맥에 사본이 없다. `collect_ssh.py`가 SSH로 원격 `git log`만
+받아온다(`ssh_repos` 설정). 삼바 마운트는 쓰지 않는다 — 끊긴 마운트에서
+`os.walk`가 무한정 블록돼 자동 실행이 멈추기 때문이다.
+
+키 인증이 필수다(`ssh-copy-id <호스트>`). launchd는 비밀번호를 입력할 수 없다.
+접속 실패는 경고만 남기고 넘어가므로, VPN이 끊긴 날도 나머지 재료로 발행된다.
 
 **서버 터미널에서 Claude Code를 쓰면 그 JSONL은 서버에 남아 수집되지 않는다.**
 
@@ -74,6 +78,7 @@ chmod 600 config.json                 # 토큰이 들어가므로
 | `git_authors` | 본인 커밋만 세기 위한 이름/이메일 목록. 비우면 필터 해제 |
 | `scope_claude_to_roots` | `true`(기본)면 `repo_roots` 안 세션의 대화만 수집 |
 | `collect_cursor` | Cursor 대화 수집 여부 (기본 `true`) |
+| `ssh_repos` | 원격 저장소 목록 `[{"host":..., "path":...}]`. 비우면 수집 안 함 |
 | `cursor_since` | 이 날짜 이전에 **시작된** 대화는 제외. 아래 설명 참고 |
 
 ### `cursor_since` 가 필요한 이유
