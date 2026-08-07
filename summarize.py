@@ -67,12 +67,23 @@ def build_prompt(payload: dict, previous: dict | None = None) -> str:
     lines.append("")
 
     claude = payload.get("claude", [])
-    lines.append(f"## AI 대화 이벤트 ({len(claude)}개, 시간순 발췌)")
+    lines.append(f"## Claude Code 대화 ({len(claude)}개, 시간순 발췌)")
     for e in claude:
         role = "나" if e.get("role") == "user" else "AI"
         text = " ".join(e.get("text", "").split())[:280]
         lines.append(f"- {e.get('time','')[11:16]} [{e.get('project')}] {role}: {text}")
     if not claude:
+        lines.append("- (없음)")
+    lines.append("")
+
+    cursor = payload.get("cursor", [])
+    lines.append(f"## Cursor 대화 ({len(cursor)}개)")
+    for e in cursor:
+        role = "나" if e.get("role") == "user" else "AI"
+        text = " ".join(e.get("text", "").split())[:280]
+        where = f"@{e['host']}" if e.get("host") else ""
+        lines.append(f"- [{e.get('project') or '무제'}{where}] {role}: {text}")
+    if not cursor:
         lines.append("- (없음)")
 
     lines.append("")

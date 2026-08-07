@@ -17,6 +17,7 @@ import os
 from datetime import datetime, timedelta
 from pathlib import Path
 
+import collect_cursor
 import collect_mac
 import summarize as S
 import publish_notion as P
@@ -64,8 +65,11 @@ def main() -> None:
                       key=lambda e: e["time"]),
         "claude": sorted(collect_mac.collect_claude(start, end, claude_roots),
                          key=lambda e: e["time"]),
+        "cursor": (collect_cursor.collect_cursor(start, end, cfg.get("cursor_since"))
+                   if cfg.get("collect_cursor", True) else []),
     }
-    print(f"[수집] {date_iso}  git={len(payload['git'])}  claude={len(payload['claude'])}")
+    print(f"[수집] {date_iso}  git={len(payload['git'])}  "
+          f"claude={len(payload['claude'])}  cursor={len(payload['cursor'])}")
 
     # 2) 요약 — 직전 발행분을 넘겨 같은 내용이 반복 보고되지 않게 한다
     previous = store.load_previous(date_iso)

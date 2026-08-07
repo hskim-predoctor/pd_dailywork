@@ -7,11 +7,24 @@ Notion 데이터베이스에 자동 발행하는 백그라운드 프로그램.
 Notion DB의 `작성자` 속성으로 한 사람의 여러 기기 기록을 묶는다.
 
 ```
-collect_mac.py   수집   git 커밋 + ~/.claude/projects/**/*.jsonl
-summarize.py     요약   claude CLI(구독) 또는 anthropic SDK(API)
-publish_notion.py 발행  Notion REST (stdlib만 사용)
-run.py           오케스트레이터
+collect_mac.py    수집   git 커밋 + ~/.claude/projects/**/*.jsonl
+collect_cursor.py 수집   Cursor 대화 (globalStorage/state.vscdb)
+summarize.py      요약   claude CLI(구독) 또는 anthropic SDK(API)
+publish_notion.py 발행   Notion REST (stdlib만 사용)
+store.py          이력   data/YYYY-MM-DD.json (중복 방지 + 직전 대조)
+run.py            오케스트레이터
 ```
+
+## 원격 서버 작업은 서버에 설치하지 않는다
+
+VSCode/Cursor Remote-SSH로 서버에 붙어 작업하면 **AI 대화는 클라이언트(맥)에
+쌓인다.** 서버에 수집기를 설치할 이유가 없고, 컨테이너에 붙어 작업하는 경우
+서버에 설치해도 컨테이너 안 저장소는 보이지 않는다. 맥 한 곳에서 모은다.
+
+서버의 git 커밋은 맥에 사본이 없으므로 잡히지 않는다. 커밋을 GitHub에 push하고
+그쪽에서 가져오거나, SSH로 원격 `git log`를 돌리는 방식이 필요하다(미구현).
+
+**서버 터미널에서 Claude Code를 쓰면 그 JSONL은 서버에 남아 수집되지 않는다.**
 
 ## 설치
 
@@ -60,6 +73,18 @@ chmod 600 config.json                 # 토큰이 들어가므로
 | `repo_roots` | 감시할 상위 폴더들. 하위 **전체 깊이**를 재귀 탐색한다 |
 | `git_authors` | 본인 커밋만 세기 위한 이름/이메일 목록. 비우면 필터 해제 |
 | `scope_claude_to_roots` | `true`(기본)면 `repo_roots` 안 세션의 대화만 수집 |
+| `collect_cursor` | Cursor 대화 수집 여부 (기본 `true`) |
+| `cursor_since` | 이 날짜 이전에 **시작된** 대화는 제외. 아래 설명 참고 |
+
+### `cursor_since` 가 필요한 이유
+
+Cursor는 개별 메시지에 타임스탬프를 남기지 않는다. 시간은 대화 단위로만 있어서,
+**1년 된 대화를 오늘 한 번 건드리면 그 대화 전체가 오늘 요약에 실린다.**
+기준일을 두면 그 이전에 시작된 대화는 통째로 제외된다.
+
+대화의 36%가 하루를 넘긴다(최장 39일). 여러 날에 걸친 대화는 마지막 활동일에
+귀속되므로 앞선 날의 내용이 섞일 수 있는데, 직전 발행분과 대조하는 로직이
+이를 걸러낸다.
 
 `git_authors`는 안전장치다. `repo_roots` 아래에 CMake `_deps` 같은 외부
 저장소가 있으면 남의 커밋이 섞일 수 있다(탐색에서도 제외하지만 이중 방어).
