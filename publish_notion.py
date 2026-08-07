@@ -61,13 +61,21 @@ def _bullets(items: list[str]) -> list[dict]:
 
 
 def build_page(summary: dict, date: str, author: str, host: str,
-               db_id: str, props_cfg: dict, title_prop: str) -> dict:
-    """Notion pages.create 요청 본문을 조립."""
-    title = f"{date} · {author} 업무 요약"
+               db_id: str, props_cfg: dict, title_prop: str,
+               device: str | None = None) -> dict:
+    """Notion pages.create 요청 본문을 조립.
+
+    device(기기 이름)를 주면 제목과 `기기` 속성에 넣는다. 한 사람이 여러
+    기기에서 발행할 때 같은 날짜 페이지를 구분하는 축이 된다.
+    """
+    dev = device or host
+    title = f"{date} · {author} · {dev} 업무 요약"
 
     properties: dict = {
         title_prop: {"title": [{"type": "text", "text": {"content": title}}]},
     }
+    if props_cfg.get("device"):
+        properties[props_cfg["device"]] = {"select": {"name": dev[:100]}}
     # 설정된 속성이 DB에 있을 때만 채운다(없으면 발행 시 400이 나므로 호출측에서 보정)
     if props_cfg.get("date"):
         properties[props_cfg["date"]] = {"date": {"start": date}}
@@ -96,17 +104,18 @@ def build_page(summary: dict, date: str, author: str, host: str,
     children.append({
         "object": "block", "type": "paragraph",
         "paragraph": {"rich_text": [{"type": "text",
-                      "text": {"content": f"— {host} 에서 자동 생성"}}]},
+                      "text": {"content": f"— {dev} ({host}) 에서 자동 생성"}}]},
     })
 
     return {"parent": {"database_id": db_id}, "properties": properties, "children": children}
 
 
 def publish(summary: dict, *, date: str, author: str, host: str,
-            db_id: str, token: str, props_cfg: dict) -> tuple[str, str]:
+            db_id: str, token: str, props_cfg: dict,
+            device: str | None = None) -> tuple[str, str]:
     """새 페이지 생성. (page_id, url) 반환."""
     title_prop = discover_title_prop(db_id, token)
-    page = build_page(summary, date, author, host, db_id, props_cfg, title_prop)
+    page = build_page(summary, date, author, host, db_id, props_cfg, title_prop, device)
     res = _req("POST", f"{API}/pages", token, page)
     return res["id"], res.get("url", "(url 없음)")
 
@@ -125,7 +134,8 @@ def _clear_children(page_id: str, token: str) -> None:
 
 
 def update(summary: dict, *, date: str, author: str, host: str, page_id: str,
-           db_id: str, token: str, props_cfg: dict) -> tuple[str, str]:
+           db_id: str, token: str, props_cfg: dict,
+           device: str | None = None) -> tuple[str, str]:
     """기존 페이지의 속성과 본문을 새 요약으로 교체. (page_id, url) 반환.
 
     페이지가 지워졌거나(404) 사용자가 보관 처리했으면 RuntimeError 를 올려
@@ -136,7 +146,7 @@ def update(summary: dict, *, date: str, author: str, host: str, page_id: str,
         raise RuntimeError(f"페이지가 보관/삭제됨: {page_id}")
 
     title_prop = discover_title_prop(db_id, token)
-    page = build_page(summary, date, author, host, db_id, props_cfg, title_prop)
+    page = build_page(summary, date, author, host, db_id, props_cfg, title_prop, device)
     res = _req("PATCH", f"{API}/pages/{page_id}", token,
                {"properties": page["properties"]})
     _clear_children(page_id, token)

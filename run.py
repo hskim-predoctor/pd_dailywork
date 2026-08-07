@@ -92,12 +92,14 @@ def main() -> None:
         title_prop = cfg.get("notion_props", {}).get("title", "제목")
         page = P.build_page(summary, date_iso, author, payload["host"],
                             cfg.get("notion_database_id", "DRY"),
-                            cfg.get("notion_props", {}), title_prop)
+                            cfg.get("notion_props", {}), title_prop,
+                            cfg.get("device") or payload["host"])
         print("[dry-run] Notion 페이지 페이로드:")
         print(json.dumps(page, ensure_ascii=False, indent=2))
         return
 
-    common = dict(date=date_iso, author=author, host=payload["host"],
+    device = cfg.get("device") or payload["host"]
+    common = dict(date=date_iso, author=author, host=payload["host"], device=device,
                   db_id=cfg["notion_database_id"], token=cfg["notion_token"],
                   props_cfg=cfg.get("notion_props", {}))
 
@@ -115,7 +117,7 @@ def main() -> None:
         page_id, url = P.publish(summary, **common)
         print(f"[발행] {url}")
 
-    rec = store.save(date_iso, title=f"{date_iso} · {author} 업무 요약",
+    rec = store.save(date_iso, title=f"{date_iso} · {author} · {device} 업무 요약",
                      summary=summary, host=payload["host"],
                      page_id=page_id, url=url)
     print(f"[기록] {rec.relative_to(HERE)}")

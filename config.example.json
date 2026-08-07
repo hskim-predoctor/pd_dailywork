@@ -9,7 +9,8 @@
     "title": "이름",
     "date": "날짜",
     "author": "작성자",
-    "project": "프로젝트"
+    "project": "프로젝트",
+    "device": "기기"
   },
   "repo_roots": [
     "~/predoctor_workspace"
@@ -19,5 +20,6 @@
     "you@example.com",
     "github-id"
   ],
-  "scope_claude_to_roots": true
+  "scope_claude_to_roots": true,
+  "device": "기기이름"
 }
